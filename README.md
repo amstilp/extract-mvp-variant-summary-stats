@@ -15,7 +15,9 @@ The script takes a list of inputs in a specific order:
 
 1. The remote file on the ftp server (e.g., `ftp.ncbi.nlm.nih.gov/dbgap/studies/phs002453/analyses/GIA/phs002453.MVP_R4.1000G_AGR.GIA.PheCodes_Pregnancy.analysis-PI.MULTI.tar`)
 2. A filename containing the variants to search for, one rsID per line (see `variants.txt` for an example)
-3. The filename in which to store the results for those variants
+3. The directory in which to store the results for those variants and analyses
+
+The names of the file with results are the same as the `.txt.gz` files in the tarball, with `.txt` appended.
 
 ## submit.py
 
@@ -26,4 +28,4 @@ If the results file already exists for the tar file, job submission is skipped.
 
 Log files are stored in `./logs/` and are named using an identifying substring in the filename (e.g., `./logs/extract_varaints_PheCodes_Pregnancy.<job_id>.out`).
 
-Results files are stored in the `./variants/` directory and are named using thes ame identifying substring (e.g., `./variants/PheCodes_Pregnancy.txt`).
+Results files are stored in the `./results/` directory and are named using thes ame identifying substring (e.g., `./results/PheCodes_Pregnancy.txt`).

@@ -6,7 +6,7 @@ import re
 
 regex = r"GIA\.(.+?)\.analysis-PI.MULTI.tar"
 
-def submit_job(file, variant_file, results_file, job_name="extract_variants"):
+def submit_job(file, variant_file, results_subdirectory, job_name="extract_variants"):
     # This function would contain the logic to submit the job.
     # For now, we will just print the file name.
     subprocess.run(
@@ -23,7 +23,7 @@ def submit_job(file, variant_file, results_file, job_name="extract_variants"):
             'extract_variants.sh',
             file,
             variant_file,
-            results_file
+            results_subdirectory,
         ],
         check=True
     )
@@ -67,13 +67,13 @@ if __name__ == "__main__":
     for file in data_files:
         matches = re.search(regex, file)
         infix = matches[1]
+        results_directory = os.path.join("results", infix)
         job_name = f"extract_variants_{infix}"
-        results_file = f'./variants/{infix}.txt'
-        if os.path.exists(results_file):
+        if os.path.exists(results_directory):
             print(f"{file}: already run!")
         else:
             # Submit the job to extract the variants.
             print(f"Submitting job {job_name} for {file}...")
-            submit_job(os.path.join(args.ftp_server, args.ftp_path, file), args.variant_file, results_file, job_name=job_name)
+            submit_job(os.path.join(args.ftp_server, args.ftp_path, file), args.variant_file, results_directory, job_name=job_name)
         # else:
         #     print(f"Skipping {file}, limit reached.")

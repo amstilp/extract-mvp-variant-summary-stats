@@ -1,22 +1,21 @@
-#! /usr/bin/bash
+#! /bin/bash
 #SBATCH -o ./logs/%x.%J.out # STDOUT
 
-set -e -o pipefail
+set -e
 
 remote_file=$1
 variant_file=$2
-results_file=$3
+results_directory=$3
 file_basename=$(basename $remote_file)
-file_basename_no_extension="${file_basename%.*}"
+file_basename_no_extension="${file_basename%.analysis-PI.MULTI.tar}"
 local_file=$TMPDIR/$file_basename
 
-mkdir -p variants/
+mkdir -p results/
 
 # Download the file
 echo "Downloading $remote_file..."
 wget --no-verbose $remote_file -O $local_file
 echo "Done!"
-
 
 # Extract the file
 echo "Untarring $local_file..."
@@ -31,19 +30,28 @@ echo "Listing text files..."
 ls -lh $TMPDIR/*/*.txt.gz
 echo "Done!"
 
-# Grepping for variants
+# List variants of interest
 echo "Variants in $variant_file:"
 cat $variant_file
 echo "Done!"
 
-echo "Extracting variants from $variant_file..."
-zgrep -w -H --file=$variant_file $TMPDIR/*/*.txt.gz > $TMPDIR/tmp.txt
+# Grep for variants in a loop over the files.
+mkdir $TMPDIR/results
+for file in $TMPDIR/*/*.txt.gz; do
+    echo "Extracting variants from $file..."
+    results_file=$TMPDIR/results/$(basename $file).txt
+    # This line causes a pipefail so we can't set -o pipefail
+    # https://stackoverflow.com/questions/41516177/bash-zcat-head-causes-pipefail
+    zcat $file | head -n 1 > $results_file
+    zgrep -w --file=$variant_file $file >> $results_file
+done
 echo "Done!"
 
-echo "Printing the head of results..."
-head $TMPDIR/tmp.txt
+echo "Listing results..."
+ls -lh $TMPDIR/results/*.txt
 echo "Done!"
 
-echo "Copying results to final final location..."
-cp $TMPDIR/tmp.txt $results_file
+echo "Copying results to final final location: ${results_directory}..."
+mkdir -p $results_directory
+cp $TMPDIR/results/* $results_directory
 echo "Done!"

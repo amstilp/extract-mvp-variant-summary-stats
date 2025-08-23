@@ -209,3 +209,4 @@ __marimo__/
 # Data files
 *.txt
 logs/*
+results/*
