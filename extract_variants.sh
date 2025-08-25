@@ -1,7 +1,8 @@
 #! /bin/bash
 #SBATCH -o ./logs/%x.%J.out # STDOUT
 
-set -e
+# # zgrep returns exit code 1 if no matches are found, so setting -e will cause the script to exit early.
+# set -e
 
 remote_file=$1
 variant_file=$2
@@ -26,8 +27,12 @@ echo "Done!"
 rm $local_file
 
 # List contents
-echo "Listing text files..."
+echo "Listing data files..."
 ls -lh $TMPDIR/*/*.txt.gz
+echo "Done!"
+
+echo "Number of data files..."
+ls -lh $TMPDIR/*/*.txt.gz | wc -l
 echo "Done!"
 
 # List variants of interest
