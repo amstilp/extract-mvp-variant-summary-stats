@@ -210,3 +210,10 @@ __marimo__/
 *.txt
 logs/*
 results/*
+*.tar
+mvp_results_*
+tmp*
+# Rmarkdown remnants
+*_cache
+*_files
+*.html
