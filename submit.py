@@ -39,8 +39,13 @@ if __name__ == "__main__":
                         help='Path on the FTP server to look for data files.')
     parser.add_argument("--variant-file", type=str, default='variants.txt',
                         help='File containing the list of variants to extract.')
-    parser.add_argument("--n-files", type=int, default=None,
+    file_parser = parser.add_mutually_exclusive_group(required=False)
+    file_parser.add_argument("--n-files", type=int, default=None,
                         help='Number of files to process from the FTP server.')
+    file_parser.add_argument("--remote-file", type=str, default=None,
+                        help='Specific file to process from the FTP server.')
+    parser.add_argument("--dry-run", action="store_true", default=False,
+                        help='If set, will not submit jobs, only print what would be done.')
     args = parser.parse_args()
 
     #Get the list of files from the FTP server.
@@ -52,13 +57,18 @@ if __name__ == "__main__":
 
     # Select data files.
     data_files = [f for f in files if f.endswith('.tar')]
-    # # For testing:
-    # data_files = [f for f in data_files if "phs002453.MVP_R4.1000G_AGR.GIA.PheCodes_Pregnancy.analysis-PI.MULTI.tar" in f]
 
-    n_files = args.n_files
-    if not n_files:
-        n_files = len(data_files)
+    if args.remote_file:
+        data_files = [f for f in data_files if f == args.remote_file]
+    elif args.n_files:
+        if len(data_files) < args.n_files:
+            print(f"Warning: Requested {args.n_files} files, but only {len(data_files)} available. Processing all available files.")
+            i = len(data_files)
+        else:
+            i = args.n_files
+        data_files = data_files[:i]
 
+    n_files = len(data_files)
     print(f"Processing {n_files} file...")
 
     print("Starting job submission...")
@@ -73,7 +83,10 @@ if __name__ == "__main__":
             print(f"{file}: already run!")
         else:
             # Submit the job to extract the variants.
-            print(f"Submitting job {job_name} for {file}...")
-            submit_job(os.path.join(args.ftp_server, args.ftp_path, file), args.variant_file, results_directory, job_name=job_name)
+            if args.dry_run:
+                print(f"Dry run: would submit job {job_name} for {file}.")
+            else:
+                print(f"Submitting job {job_name} for {file}...")
+                submit_job(os.path.join(args.ftp_server, args.ftp_path, file), args.variant_file, results_directory, job_name=job_name)
         # else:
         #     print(f"Skipping {file}, limit reached.")
