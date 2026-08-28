@@ -29,3 +29,5 @@ If the results file already exists for the tar file, job submission is skipped.
 Log files are stored in `./logs/` and are named using an identifying substring in the filename (e.g., `./logs/extract_varaints_PheCodes_Pregnancy.<job_id>.out`).
 
 Results files are stored in the `./results/` directory in a subdirectory named by a substring identifying the tar file (e.g., `./results/PheCodes_Pregnancy/`). There is one results file per analysis.
+
+The user can specify a single file to download using the `--remote-file` argument, set the `--n-files` argument to download a specified number of files, or `--dry-run` to skip actually submitting the jobs to the cluster.
