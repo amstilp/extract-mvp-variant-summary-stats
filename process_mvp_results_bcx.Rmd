@@ -231,3 +231,9 @@ stopifnot(all.equal(dd$variable, names(out)))
 
 write_tsv(dd, file=glue("{out_name}/{out_name}_dd.tsv", date=lubridate::today()))
 ```
+
+## Tar the output
+
+```{r}
+system(glue("tar -czf {out_name}.tar.gz {out_name}"))
+```
