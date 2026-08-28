@@ -1,0 +1,233 @@
+---
+title: "Process extract variants"
+author: "Your Name"
+date: "`r Sys.Date()`"
+output:
+    html_document:
+        code_folding: hide
+        self_contained: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message=FALSE)
+options(knitr.kable.NA = '')
+```
+
+```{r load-libraries}
+library(knitr)
+library(kableExtra)
+library(tidyverse)
+library(glue)
+library(ggplot2)
+library(ggrepel)
+
+out_name = glue("bcx_mvp_results_{date}", date=lubridate::today())
+```
+
+# Read in data
+
+## Requested variants
+
+These are the variants that were extracted from MVP results files.
+In some cases, a variant was not present in the results file for a trait, likely due to allele frequency.
+
+```{r}
+requested_variants = tibble(
+    rsid=readLines("variants.txt")
+)
+requested_variants %>% kable() %>% kable_styling(full_width=F)
+```
+
+## Extracted summary statistics
+
+```{r, warning=FALSE, cache=TRUE}
+files = list.files("results", recursive=T)
+col_types = cols(
+    "SNP_ID"=col_character(),
+    "chrom"=col_character(),
+    "pos"=col_integer(),
+    "ref"=col_character(),
+    "alt"=col_character(),
+    "ea"=col_character(),
+    "af"=col_double(),
+    "num_samples"=col_integer(),
+    "beta"=col_double(),
+    "sebeta"=col_double(),
+    "case_af"=col_double(),
+    "num_cases"=col_integer(),
+    "control_af"=col_double(),
+    "num_controls"=col_integer(),
+    "or"=col_double(),
+    "ci"=col_character(),
+    "pval"=col_double(),
+    "r2"=col_double(),
+    "q_pval"=col_double(),
+    "i2"=col_double(),
+    "direction"=col_character()
+)
+tmp = lapply(file.path("results", files), read_tsv, show_col_types=F, col_types=col_types, na="NA") %>%
+    setNames(files)
+regex_file = "MVP_R4.1000G_AGR\\.(.+?)\\.(.+?)\\.GIA.dbGaP.txt.gz.txt"
+results = tmp %>%
+    bind_rows(.id="file") %>%
+    separate_wider_delim(file, delim="/", names=c("batch", "file")) %>%
+    mutate(
+        tmp=str_replace(file, "MVP_R4.1000G_AGR\\.", ""),
+        tmp=str_replace(tmp, "\\.GIA.dbGaP.txt.gz.txt", "")
+    ) %>%
+    separate_wider_delim(tmp, delim=".", names=c("trait", "population")) %>%
+    mutate(trait_category=str_replace(batch, "_batch.+", ""))
+```
+
+Summarize the number of traits for a given population and variant:
+
+```{r}
+tmp = results %>%
+    group_by(SNP_ID, population) %>%
+    summarise(
+        n_traits=n(),
+        n_signif=sum(pval < 5e-8)
+    )
+tmp %>% kable() %>% collapse_rows(columns = 1:2, valign = "top") %>% kable_styling(full_width=F)
+```
+
+# Plots
+
+## Define data and functions for later use
+
+```{r}
+x = results %>%
+    filter() %>%
+    mutate(
+        label=ifelse(pval < 1e-8, trait, "")
+    ) %>%
+    arrange(trait_category, trait) %>%
+    mutate(plot_x=ordered(trait, levels=trait[!duplicated(trait)]))
+
+plot_population <- function(data, population) {
+    plot_data = data %>% filter(population==!!population)
+    p = ggplot(plot_data, aes(x=trait, y=-log10(pval))) +
+        geom_point(aes(color=trait_category), size=0.5)  +
+        facet_grid(rows=vars(SNP_ID), cols=vars(trait_category), scales="free") +
+        theme_bw() +
+        #theme_classic() +
+        theme(
+            legend.position="top",
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            axis.text.x=element_blank(),
+            axis.ticks.x=element_blank()
+        )
+    p
+}
+
+plot_snp <- function(data, snp) {
+    plot_data = data %>% filter(SNP_ID==!!snp)
+    p = ggplot(plot_data, aes(x=trait, y=-log10(pval))) +
+        geom_point(aes(color=population), size=0.5)  +
+        facet_grid(rows=vars(population), cols=vars(trait_category), scales="free") +
+        theme_bw() +
+        #theme_classic() +
+        theme(
+            legend.position="top",
+            #panel.grid.major = element_blank(),
+            #panel.grid.minor = element_blank(),
+            axis.text.x=element_blank(),
+            axis.ticks.x=element_blank()
+        )
+    p
+}
+```
+
+## Meta-analysis
+
+```{r, fig.dim = c(15, 6)}
+plot_population(x, "META")
+```
+
+## EUR
+
+```{r, fig.dim = c(15, 6)}
+plot_population(x, "EUR")
+```
+
+## AFR
+
+```{r, fig.dim = c(15, 6)}
+plot_population(x, "AFR")
+```
+
+## AMR
+
+```{r, fig.dim = c(15, 6)}
+plot_population(x, "AMR")
+```
+
+# Save combined file
+
+```{r}
+dir.create(out_name)
+```
+
+## Data file
+
+```{r}
+out = results %>%
+    select(
+        trait_category,
+        trait,
+        SNP_ID,
+        population,
+        everything()
+    ) %>%
+    select(
+        -batch,
+        -file,
+        -alt
+    ) %>%
+    rename(
+        other_allele=ref,
+        effect_allele=ea,
+        allele_frequency=af,
+    )
+out %>%
+    write_tsv(file=glue("{out_name}/{out_name}.txt.gz", ))
+```
+
+## Data dictionary
+
+```{r}
+tmp = c(
+    trait_category = "Category of trait (determined using filename from MVP)",
+    trait = "Name of trait from MVP",
+    SNP_ID = "rsID that results are for",
+    chrom = "Chromosome of variant",
+    pos = "Basepair position of variant",
+    other_allele = "Other allele",
+    effect_allele = "Effect/tested allele",
+    allele_frequency = "Frequency of effect_allele in tested samples",
+    num_samples = "Number of samples included in analysis for this variant and trait",
+    beta = "Effect size (quantitative traits only)",
+    sebeta = "Standard error of effect size (quantitative traits only)",
+    pval = "p-value",
+    r2 = "Percent variance explained by SNP?",
+    q_pval = "(meta analysis only) Cochran's heterogeneity statistic's p-value",
+    i2 = "(meta analysis only) Heterogeneity index I2 by Higgins et al 2003",
+    direction = "(meta analysis only) Direction of effects from contributing populations",
+    case_af = "(binary traits only) effect allele frequency in cases",
+    num_cases = "(binary traits only) number of cases",
+    control_af = "(binary traits only) effect allele frequency of controls",
+    num_controls = "(binary traits only) number of controls",
+    or = "(binary traits only) Odds ratio",
+    ci = "(binary traits only) Confidence intervals on odds ratio",
+    population = "Sample population (EUR, AFR, AMR) or meta-analysis (META)"
+)
+stopifnot(all(names(out) %in% names(tmp)))
+tmp = tmp[names(out)]
+stopifnot(setequal(names(tmp), names(out)))
+dd = tmp[names(out)] %>%
+    enframe(name="variable", value="description")
+stopifnot(all.equal(dd$variable, names(out)))
+
+write_tsv(dd, file=glue("{out_name}/{out_name}_dd.tsv", date=lubridate::today()))
+```
