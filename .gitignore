@@ -217,3 +217,8 @@ tmp*
 *_cache
 *_files
 *.html
+
+# My stuff
+bcx_mvp_results*
+variants.txt
+*.xlsx
