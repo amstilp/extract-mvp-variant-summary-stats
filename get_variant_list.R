@@ -1,8 +1,9 @@
 library(readxl)
 library(tidyverse)
 
-x = read_excel("Novel sentinel variants from BCX3 for MVP replication.xlsx")
+x = read_excel("TOUSE_TableS3_BCX3sentinels_5Aug2026.xlsx", skip=2)
 dim(x)
+head(x)
 
 x = x %>%
     dplyr::filter(!is.na(rsid) & rsid != "" & rsid != "NA") %>%

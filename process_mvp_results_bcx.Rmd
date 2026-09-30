@@ -20,11 +20,28 @@ library(tidyverse)
 library(glue)
 library(ggplot2)
 library(ggrepel)
+library(readxl)
 
 out_name = glue("bcx_mvp_results_{date}", date=lubridate::today())
 ```
 
 # Read in data
+
+## Read in BCX file
+
+```{r}
+bcx = read_excel("TOUSE_TableS3_BCX3sentinels_5Aug2026.xlsx", skip=2) %>%
+    mutate(assoc_id=glue("{Phenotype}_{rsid}")) %>%
+    select(assoc_id, everything())
+head(bcx)
+```
+
+## Read in trait mapping file
+
+```{r}
+mapping = read_tsv("mapping.tsv")
+mapping
+```
 
 ## Requested variants
 
@@ -35,7 +52,7 @@ In some cases, a variant was not present in the results file for a trait, likely
 requested_variants = tibble(
     rsid=readLines("variants.txt")
 )
-requested_variants %>% kable() %>% kable_styling(full_width=F)
+requested_variants %>% dim()
 ```
 
 ## Extracted summary statistics
@@ -65,18 +82,30 @@ col_types = cols(
     "i2"=col_double(),
     "direction"=col_character()
 )
-tmp = lapply(file.path("results", files), read_tsv, show_col_types=F, col_types=col_types, na="NA") %>%
-    setNames(files)
+
 regex_file = "MVP_R4.1000G_AGR\\.(.+?)\\.(.+?)\\.GIA.dbGaP.txt.gz.txt"
-results = tmp %>%
-    bind_rows(.id="file") %>%
-    separate_wider_delim(file, delim="/", names=c("batch", "file")) %>%
-    mutate(
-        tmp=str_replace(file, "MVP_R4.1000G_AGR\\.", ""),
-        tmp=str_replace(tmp, "\\.GIA.dbGaP.txt.gz.txt", "")
+
+res_list = list()
+for (i in seq_along(mapping$trait_mvp)) {
+    trait_files = files[str_detect(files, mapping$trait_mvp[i])]
+    tmp = lapply(file.path("results", trait_files), read_tsv, show_col_types=F, col_types=col_types, na="NA") %>%
+        setNames(trait_files) %>%
+        bind_rows(.id="file") %>%
+        separate_wider_delim(file, delim="/", names=c("batch", "file")) %>%
+        mutate(
+            tmp=str_replace(file, "MVP_R4.1000G_AGR\\.", ""),
+            tmp=str_replace(tmp, "\\.GIA.dbGaP.txt.gz.txt", ""),
+            trait_bcx = mapping$trait_bcx[i],
+            assoc_id = glue("{trait_bcx}_{SNP_ID}")
     ) %>%
-    separate_wider_delim(tmp, delim=".", names=c("trait", "population")) %>%
+    filter(assoc_id %in% bcx$assoc_id) %>%
+    separate_wider_delim(tmp, delim=".", names=c("trait_mvp", "population")) %>%
     mutate(trait_category=str_replace(batch, "_batch.+", ""))
+    res_list[[i]] = tmp
+}
+
+results = res_list %>% bind_rows() %>%
+    select(-assoc_id)
 ```
 
 Summarize the number of traits for a given population and variant:
@@ -99,14 +128,14 @@ tmp %>% kable() %>% collapse_rows(columns = 1:2, valign = "top") %>% kable_styli
 x = results %>%
     filter() %>%
     mutate(
-        label=ifelse(pval < 1e-8, trait, "")
+        label=ifelse(pval < 1e-8, trait_mvp, "")
     ) %>%
-    arrange(trait_category, trait) %>%
-    mutate(plot_x=ordered(trait, levels=trait[!duplicated(trait)]))
+    arrange(trait_category, trait_mvp) %>%
+    mutate(plot_x=ordered(trait_mvp, levels=trait_mvp[!duplicated(trait_mvp)]))
 
 plot_population <- function(data, population) {
     plot_data = data %>% filter(population==!!population)
-    p = ggplot(plot_data, aes(x=trait, y=-log10(pval))) +
+    p = ggplot(plot_data, aes(x=trait_mvp, y=-log10(pval))) +
         geom_point(aes(color=trait_category), size=0.5)  +
         facet_grid(rows=vars(SNP_ID), cols=vars(trait_category), scales="free") +
         theme_bw() +
@@ -123,7 +152,7 @@ plot_population <- function(data, population) {
 
 plot_snp <- function(data, snp) {
     plot_data = data %>% filter(SNP_ID==!!snp)
-    p = ggplot(plot_data, aes(x=trait, y=-log10(pval))) +
+    p = ggplot(plot_data, aes(x=trait_mvp, y=-log10(pval))) +
         geom_point(aes(color=population), size=0.5)  +
         facet_grid(rows=vars(population), cols=vars(trait_category), scales="free") +
         theme_bw() +
@@ -142,25 +171,25 @@ plot_snp <- function(data, snp) {
 ## Meta-analysis
 
 ```{r, fig.dim = c(15, 6)}
-plot_population(x, "META")
+#plot_population(x, "META")
 ```
 
 ## EUR
 
 ```{r, fig.dim = c(15, 6)}
-plot_population(x, "EUR")
+#plot_population(x, "EUR")
 ```
 
 ## AFR
 
 ```{r, fig.dim = c(15, 6)}
-plot_population(x, "AFR")
+#plot_population(x, "AFR")
 ```
 
 ## AMR
 
 ```{r, fig.dim = c(15, 6)}
-plot_population(x, "AMR")
+#plot_population(x, "AMR")
 ```
 
 # Save combined file
@@ -175,7 +204,8 @@ dir.create(out_name)
 out = results %>%
     select(
         trait_category,
-        trait,
+        trait_bcx,
+        trait_mvp,
         SNP_ID,
         population,
         everything()
@@ -199,7 +229,8 @@ out %>%
 ```{r}
 tmp = c(
     trait_category = "Category of trait (determined using filename from MVP)",
-    trait = "Name of trait from MVP",
+    trait_mvp = "Name of trait from MVP",
+    trait_bcx = "Name of trait from BCX",
     SNP_ID = "rsID that results are for",
     chrom = "Chromosome of variant",
     pos = "Basepair position of variant",
